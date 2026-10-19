@@ -123,6 +123,8 @@
   .done table{margin:12px auto;text-align:left;font-size:15px}
   .done td{padding:3px 8px}
   .done td:first-child{color:var(--muted)}
+  .gcal{margin:6px 0 4px}
+  .gcal .btn{display:block;width:100%;margin-top:8px;font-size:14px;border-color:var(--green);color:var(--green)}
 
   /* ID 卡 */
   .idbox{background:#f6f5f0;border-radius:10px;padding:10px;font-family:monospace;font-size:14px;word-break:break-all;margin-bottom:10px}
@@ -214,7 +216,7 @@
       <div class="total" id="totalLine"></div>
       <label class="f" for="fName">姓名</label>
       <input class="inp" id="fName" maxlength="30" placeholder="王小明">
-      <label class="f" for="fPhone">手機</label>
+      <label class="f" for="fPhone">手機（選填）</label>
       <input class="inp" id="fPhone" type="tel" maxlength="12" placeholder="0912345678">
       <label class="f" for="fNote">備註（選填）</label>
       <textarea class="inp" id="fNote" maxlength="200" placeholder="想加強的地方、程度…"></textarea>
@@ -237,6 +239,7 @@
       <div class="big">🎉</div>
       <h3>預約成功！</h3>
       <table id="doneTable"></table>
+      <div id="gcalBox" class="gcal"></div>
       <p class="hint">LINE 會收到一則確認訊息，上課前一天也會提醒你喔 ♡</p>
       <div class="row" style="justify-content:center;margin-top:14px">
         <button class="btn" id="btnAgain">再約一堂</button>
@@ -287,8 +290,8 @@
           <button type="button" class="btn sm" id="bNone">清空</button>
         </div>
         <p class="hint">平日、假日可以勾不同時段。沒勾任何時段的那一類日子 = 不開放。</p>
-        <label class="f" for="bNote">場地備註（選填，會出現在學生的 LINE 訊息）</label>
-        <input class="inp" id="bNote" maxlength="100" placeholder="北區運動中心 3 號場">
+        <label class="f" for="bNote">場地（平常在藏龍就空白；去別的球館才填）</label>
+        <input class="inp" id="bNote" maxlength="100" placeholder="空白＝藏龍羽球概念館">
       </div>
       <button class="btn primary block" id="btnBatch" style="margin-top:12px">開始批次儲存</button>
       <div class="progress" id="batchMsg"></div>
@@ -311,8 +314,8 @@
           <label class="f">勾選要開放的時段</label>
           <div id="chipsDay" class="chips"></div>
           <p class="hint">標「已約」= 已有學生預約或日曆上有行程。取消勾選不會取消學生的預約。</p>
-          <label class="f" for="sNote">場地備註（選填）</label>
-          <input class="inp" id="sNote" maxlength="100" placeholder="北區運動中心 3 號場">
+          <label class="f" for="sNote">場地（平常在藏龍就空白；去別的球館才填）</label>
+          <input class="inp" id="sNote" maxlength="100" placeholder="空白＝藏龍羽球概念館">
         </div>
         <button class="btn primary block" id="btnSaveDay" style="margin-top:12px">儲存這一天</button>
       </div>
@@ -330,7 +333,7 @@
 const LIFF_ID      = "2012088166-K3BBOOLu";            // LINE Login 頻道 → LIFF 分頁 → LIFF ID
 const SCRIPT_URL   = "https://script.google.com/macros/s/AKfycby-ERvDx-nlGGHaFflwdBGOREBUKtJL2pq0gQVlZ-_xwZkrtfWdy3jMIZIDusl472-J/exec";     // Apps Script 部署後的網址（/exec 結尾）
 const OWNER_USERID = "U873014aed017edd1cff3d471934693fb";       // 跟 Code.gs 裡的一樣
-const EXPECTED_VERSION = "v2-badminton";        // 跟 Code.gs 的 VERSION 一樣，用來比對
+const EXPECTED_VERSION = "v4-badminton";        // 跟 Code.gs 的 VERSION 一樣，用來比對
 
 /* =================================================================
  * 以下不用改
@@ -606,7 +609,7 @@ async function openDay(date) {
 function renderSlots(r) {
   const box = $("slotsBody");
   const date = r.date;
-  const venue = r.note || "";
+  const venue = r.venue || r.note || "";
   if (r.status === "休假" || r.status === "進修") {
     state.cart = state.cart.filter(x => x.date !== date);
     updateCartBar();
@@ -689,7 +692,7 @@ async function submitBooking() {
   const note = $("fNote").value.trim();
   if (!state.course) return err.textContent = "請先選擇課程 🙏";
   if (!name) return err.textContent = "請填寫姓名";
-  if (!/^0\d{8,9}$/.test(phone)) return err.textContent = "手機號碼格式好像不對，例如 0912345678";
+  if (phone && !/^0\d{8,9}$/.test(phone)) return err.textContent = "手機號碼格式好像不對，例如 0912345678（也可以不填）";
   if (!state.userId) return err.textContent = "抓不到你的 LINE 身分，請從 LINE 官方帳號的選單開啟這頁再預約";
   if (!state.cart.length) return err.textContent = "還沒有選時段喔";
 
@@ -721,6 +724,7 @@ async function submitBooking() {
             (v ? `<tr><td></td><td>📍 ${esc(v)}</td></tr>` : "");
         }).join("") +
         `<tr><td>🎾</td><td>${esc(b.course)}（${n > 1 ? `$${esc(b.price)} × ${n} = $${esc(b.total)}` : `$${esc(b.price)}`}）</td></tr>`;
+      renderGcalButtons(b);
       state.cart = [];
       $("fNote").value = "";
       show("viewDone");
@@ -746,6 +750,54 @@ async function submitBooking() {
   } finally {
     btn.disabled = false; btn.textContent = "送出預約";
   }
+}
+
+/* ---------- 加入學生自己的 Google 日曆 ---------- */
+// 同一天連續的時段合併成一段，例如 10:00、11:00 → 10:00–12:00
+function mergeRanges(items) {
+  const out = [];
+  groupItems(items).forEach(g => {
+    g.times.slice().sort().forEach(t => {
+      const last = out[out.length - 1];
+      if (last && last.date === g.date && last.end === t) last.end = endTime(t);
+      else {
+        const it = items.find(x => x.date === g.date && x.time === t) || {};
+        out.push({ date: g.date, start: t, end: endTime(t), location: it.location || it.venue || "" });
+      }
+    });
+  });
+  return out;
+}
+function gcalUrl(r, course) {
+  const d = r.date.replace(/-/g, "");
+  const tm = t => t.replace(":", "") + "00";
+  const q = new URLSearchParams({
+    action: "TEMPLATE",
+    text: "🏸 羽球課（許教練）",
+    dates: `${d}T${tm(r.start)}/${d}T${tm(r.end)}`,
+    ctz: "Asia/Taipei",
+    details: `${course}\n請準時到場，有事請提前告知教練\nBy 許教練`,
+    location: r.location
+  });
+  return "https://calendar.google.com/calendar/render?" + q.toString();
+}
+function openExternal(url) {
+  // LINE 裡面要用外部瀏覽器開，Google 才讓你登入
+  try {
+    if (window.liff && liff.isInClient && liff.isInClient()) { liff.openWindow({ url, external: true }); return; }
+  } catch (e) {}
+  window.open(url, "_blank");
+}
+function renderGcalButtons(b) {
+  const ranges = mergeRanges(b.items);
+  $("gcalBox").innerHTML = ranges.map((r, i) =>
+    `<button type="button" class="btn" data-i="${i}">📅 加入我的 Google 日曆` +
+    (ranges.length > 1 ? `：${esc(dateZh(r.date))} ${r.start}–${r.end}` : "") + `</button>`).join("");
+  $("gcalBox").querySelectorAll("button").forEach(btn => btn.onclick = () => {
+    const r = ranges[Number(btn.dataset.i)];
+    openExternal(gcalUrl(r, b.course));
+    btn.textContent = "✅ 已開啟，在日曆裡按「儲存」就完成";
+  });
 }
 
 /* ---------- 顯示 userId（給設定用） ---------- */
