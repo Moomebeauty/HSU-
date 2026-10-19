@@ -66,6 +66,8 @@
   .day.study{background:#e8eef5;color:#40607e;cursor:default}
   .day.today{box-shadow:inset 0 0 0 2px var(--gold)}
   .day.blank{background:none}
+  .day{position:relative}
+  .day .badge{position:absolute;top:3px;right:3px;background:var(--gold);color:#fff;border-radius:8px;font-size:10px;min-width:16px;height:16px;line-height:16px;padding:0 3px;font-weight:600}
   .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
   .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 
@@ -81,6 +83,20 @@
   .sec.grey{color:#a9a9a3;margin-top:16px}
   .slot-ok{display:flex;justify-content:space-between;align-items:center;width:100%;background:var(--green);color:#fff;border:none;border-radius:12px;padding:15px 16px;font-size:17px;margin-bottom:8px}
   .slot-ok span:last-child{font-size:14px;opacity:.85}
+  .slot-ok.sel{background:var(--gold)}
+  .slot-ok.sel span:last-child{opacity:1}
+  .pick-hint{font-size:13px;color:var(--muted);margin:-4px 0 10px}
+
+  /* 已選時段（購物車） */
+  .cartbar{position:fixed;left:0;right:0;bottom:0;z-index:10;background:#fff;border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .cartbar b{color:var(--green);font-size:16px}
+  .cartbar small{display:block;font-size:12px;color:var(--muted);line-height:1.3}
+  body.has-cart main{padding-bottom:90px}
+  .cart-list{background:var(--mint);border-radius:10px;padding:6px 12px;margin-bottom:8px}
+  .cart-date{color:var(--green);font-weight:600;font-size:15px;margin-top:6px}
+  .cart-item{display:flex;justify-content:space-between;align-items:center;padding:3px 0 3px 10px;font-size:15px}
+  .cart-item button{border:none;background:none;color:#a07e45;font-size:13px;padding:4px 6px}
+  .total{text-align:right;font-size:15px;color:var(--green);font-weight:600;margin:-6px 0 12px;min-height:22px}
   .full-list{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .slot-full{background:var(--grey);color:#b1b1ab;border-radius:10px;padding:9px;text-align:center;font-size:14px;text-decoration:line-through}
   .empty{text-align:center;padding:24px 10px;color:var(--muted);font-size:16px}
@@ -182,17 +198,20 @@
     <button class="back" id="backToCal">‹ 回月曆</button>
     <div class="card">
       <h3 id="slotsTitle"></h3>
+      <p class="pick-hint">💡 可以一次選好幾個時段，也可以換別天繼續加選，選好按下方「下一步」</p>
       <div id="slotsBody"></div>
     </div>
   </section>
 
   <!-- 第 3 頁：填資料 -->
   <section id="viewForm" class="hidden">
-    <button class="back" id="backToSlots">‹ 重選時段</button>
+    <button class="back" id="backToSlots">‹ 回月曆加選或修改</button>
     <div class="card">
-      <div class="summary" id="formSummary"></div>
-      <h3>選擇課程</h3>
+      <h3>已選時段</h3>
+      <div class="cart-list" id="cartList"></div>
+      <h3 style="margin-top:14px">選擇課程</h3>
       <div class="courses" id="courseBox"></div>
+      <div class="total" id="totalLine"></div>
       <label class="f" for="fName">姓名</label>
       <input class="inp" id="fName" maxlength="30" placeholder="王小明">
       <label class="f" for="fPhone">手機</label>
@@ -228,6 +247,12 @@
 </main>
 
 <footer>By 許教練</footer>
+
+<!-- 已選時段的底部列 -->
+<div id="cartBar" class="cartbar hidden">
+  <div><b id="cartCount"></b><small>可以換別天繼續加選</small></div>
+  <button class="btn primary" id="btnCartNext">下一步 ›</button>
+</div>
 
 <!-- ⚙️ 教練模式面板（只有許教練看得到） -->
 <section id="coachPanel" class="hidden">
@@ -305,7 +330,7 @@
 const LIFF_ID      = "2012088166-K3BBOOLu";            // LINE Login 頻道 → LIFF 分頁 → LIFF ID
 const SCRIPT_URL   = "https://script.google.com/macros/s/AKfycby-ERvDx-nlGGHaFflwdBGOREBUKtJL2pq0gQVlZ-_xwZkrtfWdy3jMIZIDusl472-J/exec";     // Apps Script 部署後的網址（/exec 結尾）
 const OWNER_USERID = "U873014aed017edd1cff3d471934693fb";       // 跟 Code.gs 裡的一樣
-const EXPECTED_VERSION = "v1-badminton";        // 跟 Code.gs 的 VERSION 一樣，用來比對
+const EXPECTED_VERSION = "v2-badminton";        // 跟 Code.gs 的 VERSION 一樣，用來比對
 
 /* =================================================================
  * 以下不用改
@@ -315,6 +340,7 @@ const COURSES = [
   { key:"一對一", price:1200, desc:"1 小時・含場地費" },
   { key:"一對二", price:1500, desc:"含場地費・一人 $750" }
 ];
+const MAX_ITEMS = 8;         // 一次最多可以約幾堂（跟 Code.gs 一樣）
 const MONTHS_AHEAD = 3;      // 可以看幾個月（含本月）
 const CACHE_MS = 15000;      // 月份快取 15 秒
 const LOADING_TEXTS = [
@@ -327,7 +353,7 @@ const LOADING_TEXTS = [
 const FIXED_HOLIDAYS = [["01-01","元旦"],["02-28","和平紀念"],["04-04","兒童節"],["05-01","勞動節"],
                         ["09-28","教師節"],["10-10","國慶日"],["10-25","光復節"],["12-25","行憲紀念"]];
 
-const state = { userId:"", displayName:"", ym:"", date:"", time:"", course:"", venue:"", member:null };
+const state = { userId:"", displayName:"", ym:"", date:"", course:"", member:null, cart:[] };   // cart = 已選的時段 [{date,time}]
 const monthCache = {};
 const holidayMap = {};
 const holidayLoaded = {};
@@ -416,6 +442,28 @@ function notice(msg) { const n = $("topNotice"); n.textContent = msg; n.classLis
 function show(view) {
   ["viewCalendar","viewSlots","viewForm","viewDone"].forEach(v => $(v).classList.toggle("hidden", v !== view));
   window.scrollTo(0, 0);
+  updateCartBar();
+}
+
+/* ---------- 已選時段（購物車） ---------- */
+const sortCart = () => state.cart.sort((a, b) => (a.date + a.time < b.date + b.time ? -1 : 1));
+const inCart = (date, t) => state.cart.some(x => x.date === date && x.time === t);
+const cartCountOn = date => state.cart.filter(x => x.date === date).length;
+function removeFromCart(date, t) { state.cart = state.cart.filter(x => !(x.date === date && x.time === t)); }
+function groupItems(items) {
+  const groups = [], map = {};
+  items.forEach(it => {
+    if (!map[it.date]) { map[it.date] = { date: it.date, times: [] }; groups.push(map[it.date]); }
+    map[it.date].times.push(it.time);
+  });
+  return groups;
+}
+function updateCartBar() {
+  const onPickPage = !$("viewCalendar").classList.contains("hidden") || !$("viewSlots").classList.contains("hidden");
+  const visible = state.cart.length > 0 && onPickPage && $("coachPanel").classList.contains("hidden");
+  $("cartBar").classList.toggle("hidden", !visible);
+  document.body.classList.toggle("has-cart", visible);
+  $("cartCount").textContent = `已選 ${state.cart.length} 堂`;
 }
 
 /* ---------- 國定假日 ---------- */
@@ -524,7 +572,9 @@ function renderCalendar(ym, data) {
       else if (cleanSlots(data.month[ds]).length) { cls = "ok"; lab = "可約"; click = true; }
     }
     if (ds === today) cls += " today";
+    const picked = cartCountOn(ds);
     html += `<button class="day ${cls}" ${click ? `data-d="${ds}"` : "disabled"}>` +
+            (picked ? `<span class="badge">${picked}</span>` : "") +
             `<span class="num${hol ? " red" : ""}">${d}</span>` +
             (hol ? `<span class="hol">${esc(hol.slice(0, 4))}</span>` : "") +
             `<span class="lab">${lab}</span></button>`;
@@ -536,7 +586,7 @@ function renderCalendar(ym, data) {
 
 /* ---------- 時段 ---------- */
 async function openDay(date) {
-  state.date = date; state.time = "";
+  state.date = date;
   show("viewSlots");
   $("slotsTitle").textContent = "📅 " + dateZh(date);
   const box = $("slotsBody");
@@ -555,26 +605,45 @@ async function openDay(date) {
 
 function renderSlots(r) {
   const box = $("slotsBody");
-  state.venue = r.note || "";
+  const date = r.date;
+  const venue = r.note || "";
   if (r.status === "休假" || r.status === "進修") {
+    state.cart = state.cart.filter(x => x.date !== date);
+    updateCartBar();
     box.innerHTML = `<div class="empty">教練這天${esc(r.status)}，請改選其他日期 ♡</div>`;
     return;
   }
   const avail = cleanSlots(r.slots);
+  // 之前選了、但現在已經被約走的時段，從已選清單拿掉
+  state.cart = state.cart.filter(x => x.date !== date || avail.includes(x.time));
+  updateCartBar();
   const full = cleanSlots(r.open).filter(t => !avail.includes(t));
-  let html = state.venue ? `<div class="venue">📍 場地：${esc(state.venue)}</div>` : "";
+  let html = venue ? `<div class="venue">📍 場地：${esc(venue)}</div>` : "";
   if (!avail.length) {
     html += `<div class="empty">本日已約滿，請改選其他日期 ♡</div>`;
   } else {
     html += `<h3 class="sec">可預約時段</h3>` +
-      avail.map(t => `<button class="slot-ok" data-t="${t}"><span>${t} – ${endTime(t)}</span><span>選這個 ›</span></button>`).join("");
+      avail.map(t => `<button class="slot-ok${inCart(date, t) ? " sel" : ""}" data-t="${t}"><span>${t} – ${endTime(t)}</span><span>${inCart(date, t) ? "✓ 已選" : "＋ 選擇"}</span></button>`).join("");
   }
   if (full.length) {
     html += `<h3 class="sec grey">時段已額滿</h3><div class="full-list">` +
       full.map(t => `<div class="slot-full">${t} – ${endTime(t)}</div>`).join("") + `</div>`;
   }
   box.innerHTML = html;
-  box.querySelectorAll("[data-t]").forEach(b => b.onclick = () => openForm(b.dataset.t));
+  box.querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
+    const t = b.dataset.t;
+    if (inCart(date, t)) {
+      removeFromCart(date, t);
+    } else {
+      if (state.cart.length >= MAX_ITEMS) { alert(`一次最多可以約 ${MAX_ITEMS} 堂喔，請先送出這些，再約下一批 🙏`); return; }
+      state.cart.push({ date, time: t });
+      sortCart();
+    }
+    const on = inCart(date, t);
+    b.classList.toggle("sel", on);
+    b.lastElementChild.textContent = on ? "✓ 已選" : "＋ 選擇";
+    updateCartBar();
+  });
 }
 
 /* ---------- 填資料 ---------- */
@@ -583,11 +652,27 @@ function renderCourses() {
     `<button type="button" class="course${state.course === c.key ? " on" : ""}" data-c="${c.key}">` +
     `<b>${c.key}</b><span class="p">$${c.price}</span><small>${c.desc}</small></button>`).join("");
   $("courseBox").querySelectorAll("[data-c]").forEach(b => b.onclick = () => { state.course = b.dataset.c; renderCourses(); });
+  const c = COURSES.find(x => x.key === state.course);
+  const n = state.cart.length;
+  $("totalLine").textContent = c ? (n > 1 ? `$${c.price} × ${n} 堂 = 共 $${c.price * n}` : `共 $${c.price}`) : "";
 }
 
-function openForm(t) {
-  state.time = t;
-  $("formSummary").textContent = `📅 ${dateZh(state.date)}　⏰ ${t} – ${endTime(t)}`;
+function renderCartList() {
+  $("cartList").innerHTML = groupItems(state.cart).map(g =>
+    `<div class="cart-date">📅 ${esc(dateZh(g.date))}</div>` +
+    g.times.map(t => `<div class="cart-item"><span>⏰ ${t} – ${endTime(t)}</span><button type="button" data-d="${g.date}" data-t="${t}">✕ 取消</button></div>`).join("")
+  ).join("");
+  $("cartList").querySelectorAll("button[data-t]").forEach(b => b.onclick = () => {
+    removeFromCart(b.dataset.d, b.dataset.t);
+    if (!state.cart.length) { show("viewCalendar"); loadMonth(state.ym); return; }
+    renderCartList(); renderCourses();
+  });
+}
+
+function openForm() {
+  if (!state.cart.length) return;
+  sortCart();
+  renderCartList();
   renderCourses();
   if (state.member) {
     if (!$("fName").value) $("fName").value = state.member.name || "";
@@ -606,11 +691,13 @@ async function submitBooking() {
   if (!name) return err.textContent = "請填寫姓名";
   if (!/^0\d{8,9}$/.test(phone)) return err.textContent = "手機號碼格式好像不對，例如 0912345678";
   if (!state.userId) return err.textContent = "抓不到你的 LINE 身分，請從 LINE 官方帳號的選單開啟這頁再預約";
+  if (!state.cart.length) return err.textContent = "還沒有選時段喔";
 
   const btn = $("btnSubmit");
   btn.disabled = true; btn.textContent = "送出中… 🏸";
   err.textContent = "";
-  const payload = { action: "book", date: state.date, time: state.time, course: state.course,
+  const items = state.cart.map(x => ({ date: x.date, time: x.time }));
+  const payload = { action: "book", items, course: state.course,
                     name, phone, note, userId: state.userId, displayName: state.displayName };
   try {
     const ctrl = new AbortController();
@@ -621,20 +708,36 @@ async function submitBooking() {
       r = JSON.parse(await res.text());
     } finally { clearTimeout(timer); }
 
-    if (r && r.ok) {
-      delete monthCache[state.date.slice(0, 7)];
+    if (r && r.ok && r.booking && Array.isArray(r.booking.items)) {
+      Object.keys(monthCache).forEach(k => delete monthCache[k]);
       state.member = { name, phone };
       const b = r.booking;
+      const n = b.items.length;
       $("doneTable").innerHTML =
-        `<tr><td>日期</td><td>${esc(dateZh(b.date))}</td></tr>` +
-        `<tr><td>時間</td><td>${esc(b.time)} – ${esc(endTime(b.time))}</td></tr>` +
-        `<tr><td>課程</td><td>${esc(b.course)}（$${esc(b.price)}）</td></tr>` +
-        `<tr><td>場地</td><td>${esc(b.venue)}</td></tr>`;
+        groupItems(b.items).map(g => {
+          const v = (b.items.find(x => x.date === g.date) || {}).venue || "";
+          return `<tr><td>📅</td><td><b>${esc(dateZh(g.date))}</b></td></tr>` +
+            g.times.map(t => `<tr><td></td><td>⏰ ${esc(t)} – ${esc(endTime(t))}</td></tr>`).join("") +
+            (v ? `<tr><td></td><td>📍 ${esc(v)}</td></tr>` : "");
+        }).join("") +
+        `<tr><td>🎾</td><td>${esc(b.course)}（${n > 1 ? `$${esc(b.price)} × ${n} = $${esc(b.total)}` : `$${esc(b.price)}`}）</td></tr>`;
+      state.cart = [];
       $("fNote").value = "";
       show("viewDone");
     } else if (r && r.error === "taken") {
-      err.textContent = "哎呀，這個時段剛剛被約走了 😢 幫你重新整理時段…";
-      setTimeout(() => openDay(state.date), 1500);
+      const gone = Array.isArray(r.taken) ? r.taken : [];
+      gone.forEach(x => removeFromCart(x.date, x.time));
+      Object.keys(monthCache).forEach(k => delete monthCache[k]);
+      const list = gone.map(x => `${dateZh(x.date)} ${x.time}`).join("、");
+      if (state.cart.length) {
+        renderCartList(); renderCourses();
+        err.textContent = `哎呀，${list || "有時段"} 剛剛被約走了 😢 已幫你拿掉，其他時段還保留著，確認後請再按一次送出。`;
+      } else {
+        err.textContent = `哎呀，${list || "這個時段"} 剛剛被約走了 😢 幫你回到月曆重新選…`;
+        setTimeout(() => { show("viewCalendar"); loadMonth(state.ym, true); }, 1800);
+      }
+    } else if (r && r.error === "too_many") {
+      err.textContent = `一次最多可以約 ${MAX_ITEMS} 堂喔，請拿掉幾堂再送出 🙏`;
     } else {
       err.textContent = "送出失敗（" + esc((r && (r.message || r.error)) || "未知原因") + "），請再試一次";
     }
@@ -694,6 +797,7 @@ function openPanel() {
   makeChips($("chipsHd"), hdSet);
   $("coachPanel").classList.remove("hidden");
   document.body.style.overflow = "hidden";
+  updateCartBar();
 }
 function closePanel() {
   $("coachPanel").classList.add("hidden");
@@ -839,7 +943,8 @@ function bindEvents() {
   $("prevM").onclick = () => loadMonth(shiftYm(state.ym, -1));
   $("nextM").onclick = () => loadMonth(shiftYm(state.ym, 1));
   $("backToCal").onclick = () => { show("viewCalendar"); loadMonth(state.ym); };
-  $("backToSlots").onclick = () => openDay(state.date);
+  $("backToSlots").onclick = () => { show("viewCalendar"); loadMonth(state.ym); };
+  $("btnCartNext").onclick = openForm;
   $("btnSubmit").onclick = submitBooking;
   $("btnAgain").onclick = () => { show("viewCalendar"); loadMonth(state.ym, true); };
   $("btnClose").onclick = () => {
