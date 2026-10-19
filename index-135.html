@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>許教練 羽球預約</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  /* ====== 🎨 配色（A 墨綠球場）想換色只要改這裡 ====== */
+  :root{
+    --green:#2a4a3f;      /* 主色：墨綠 */
+    --green-2:#3a6152;    /* 主色（按下時） */
+    --bg:#fafaf7;         /* 背景：米白 */
+    --gold:#c9a96e;       /* 點綴：軟木黃 */
+    --mint:#e3ece6;       /* 可約格子底色 */
+    --line:#e6e4dc;       /* 細線 */
+    --text:#25302b;       /* 文字 */
+    --muted:#7d8782;      /* 淡文字 */
+    --grey:#efeeea;       /* 已滿格子 */
+    --red:#c0392b;        /* 假日紅字 */
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;font-size:16px;line-height:1.6}
+  button{font-family:inherit;cursor:pointer}
+  input,select,textarea{font-family:inherit;font-size:16px}
+  .hidden{display:none!important}
+
+  .top{position:sticky;top:0;z-index:5;background:var(--green);color:#fafaf7;padding:13px 16px;display:flex;align-items:center;justify-content:space-between}
+  .brand{font-weight:600;letter-spacing:1px;font-size:17px}
+  .gear{width:34px;height:34px;border-radius:50%;border:none;background:#fafaf7;color:var(--green);font-size:17px;line-height:34px;padding:0}
+  main{max-width:520px;margin:0 auto;padding:14px 14px 10px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  h3{margin:0 0 10px;font-size:16px}
+  .hint{font-size:13px;color:var(--muted);margin:6px 0 0}
+  .notice{background:#fff7e6;border:1px solid #f0dcb0;color:#7a5a17;border-radius:12px;padding:10px 14px;font-size:14px;margin-bottom:12px}
+
+  .btn{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:10px;padding:10px 16px;font-size:15px}
+  .btn.primary{background:var(--green);border-color:var(--green);color:#fff}
+  .btn.primary:active{background:var(--green-2)}
+  .btn.block{display:block;width:100%;padding:13px;font-size:16px}
+  .btn.sm{padding:7px 14px;font-size:14px}
+  .btn:disabled{opacity:.55}
+  .back{background:none;border:none;color:var(--green);font-size:15px;padding:0;margin-bottom:10px}
+
+  /* 課程介紹 */
+  .intro-row{display:flex;gap:10px}
+  .intro-row>div{flex:1;background:var(--mint);border-radius:10px;padding:10px;text-align:center}
+  .intro-row b{display:block;color:var(--green)}
+  .intro-row span{font-size:13px;color:var(--muted)}
+
+  /* 月曆 */
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .cal-head b{font-size:17px}
+  .nav{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:#fff;font-size:18px;color:var(--green)}
+  .nav:disabled{opacity:.3}
+  .week,.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+  .week div{text-align:center;font-size:13px;color:var(--muted);padding-bottom:4px}
+  .day{min-height:60px;border:none;border-radius:9px;padding:4px 0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:15px;overflow:hidden}
+  .day .num{font-weight:600;line-height:1.2}
+  .day .num.red{color:var(--red)}
+  .day .hol{font-size:9px;color:var(--red);line-height:1.1;white-space:nowrap}
+  .day .lab{font-size:11px;line-height:1.3}
+  .day.ok{background:var(--mint);color:var(--green)}
+  .day.full{background:var(--grey);color:#a9a9a3;cursor:default}
+  .day.off{background:#f3ebdc;color:#8a6d3b;cursor:default}
+  .day.study{background:#e8eef5;color:#40607e;cursor:default}
+  .day.today{box-shadow:inset 0 0 0 2px var(--gold)}
+  .day.blank{background:none}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+
+  /* 載入中、錯誤 */
+  .loading{text-align:center;padding:30px 10px;color:var(--muted)}
+  .shuttle{font-size:30px;display:inline-block;animation:hop 1s ease-in-out infinite}
+  @keyframes hop{0%,100%{transform:translateY(0) rotate(-10deg)}50%{transform:translateY(-12px) rotate(10deg)}}
+  .err{background:#fbeeee;color:#8a2c2c;border-radius:12px;padding:16px;text-align:center}
+  .err div{margin-bottom:10px}
+
+  /* 時段 */
+  .sec{font-size:15px;margin:4px 0 8px;color:var(--green)}
+  .sec.grey{color:#a9a9a3;margin-top:16px}
+  .slot-ok{display:flex;justify-content:space-between;align-items:center;width:100%;background:var(--green);color:#fff;border:none;border-radius:12px;padding:15px 16px;font-size:17px;margin-bottom:8px}
+  .slot-ok span:last-child{font-size:14px;opacity:.85}
+  .full-list{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .slot-full{background:var(--grey);color:#b1b1ab;border-radius:10px;padding:9px;text-align:center;font-size:14px;text-decoration:line-through}
+  .empty{text-align:center;padding:24px 10px;color:var(--muted);font-size:16px}
+  .venue{background:var(--mint);color:var(--green);border-radius:10px;padding:8px 12px;font-size:14px;margin-bottom:12px}
+
+  /* 表單 */
+  .summary{background:var(--mint);border-radius:10px;padding:10px 14px;color:var(--green);font-weight:600;margin-bottom:14px}
+  .courses{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  .course{border:2px solid var(--line);border-radius:12px;padding:12px 8px;text-align:center;background:#fff}
+  .course b{display:block;font-size:16px}
+  .course .p{color:var(--green);font-weight:600}
+  .course small{display:block;font-size:12px;color:var(--muted)}
+  .course.on{border-color:var(--green);background:var(--mint)}
+  label.f{display:block;font-size:14px;color:var(--muted);margin:10px 0 4px}
+  .inp{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fff}
+  textarea.inp{min-height:70px;resize:vertical}
+  .rules{background:#f6f5f0;border-radius:10px;padding:10px 14px;font-size:14px;margin:14px 0}
+  .rules ul{margin:4px 0 0;padding-left:20px}
+  .ferr{color:var(--red);font-size:14px;margin-top:8px;min-height:20px}
+
+  /* 完成 */
+  .done{text-align:center}
+  .done .big{font-size:44px}
+  .done table{margin:12px auto;text-align:left;font-size:15px}
+  .done td{padding:3px 8px}
+  .done td:first-child{color:var(--muted)}
+
+  /* ID 卡 */
+  .idbox{background:#f6f5f0;border-radius:10px;padding:10px;font-family:monospace;font-size:14px;word-break:break-all;margin-bottom:10px}
+
+  footer{text-align:center;color:var(--muted);font-size:13px;padding:10px 0 26px;letter-spacing:1px}
+
+  /* ⚙️ 教練模式 */
+  #coachPanel{position:fixed;inset:0;z-index:20;background:var(--bg);overflow-y:auto}
+  .panel-head{position:sticky;top:0;background:var(--green);color:#fff;padding:13px 16px;display:flex;justify-content:space-between;align-items:center;z-index:2}
+  .panel-head button{background:none;border:none;color:#fff;font-size:22px;line-height:1}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .row input[type=date]{flex:1;min-width:130px}
+  .radios{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+  .radios label{border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:14px;background:#fff}
+  .radios input{margin-right:4px}
+  .tabs{display:flex;gap:6px;margin:8px 0}
+  .tabs button{flex:1;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 4px;font-size:14px}
+  .tabs button.on{background:var(--green);color:#fff;border-color:var(--green)}
+  .chips{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 0;font-size:14px;color:var(--text)}
+  .chip.on{background:var(--green);color:#fff;border-color:var(--green)}
+  .chip.booked::after{content:"已約";display:block;font-size:10px;color:var(--gold);line-height:1}
+  .quick{display:flex;gap:6px;margin-top:8px}
+  .progress{font-size:14px;margin-top:10px;white-space:pre-line}
+  .ok-t{color:var(--green)} .bad-t{color:var(--red)}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">🏸 許教練 羽球預約</div>
+  <button id="gearBtn" class="gear hidden" aria-label="教練模式">⚙️</button>
+</header>
+
+<main>
+  <div id="topNotice" class="notice hidden"></div>
+
+  <!-- 🪪 顯示 userId（網址加 ?showid=1 才會出現） -->
+  <section id="idCard" class="card hidden">
+    <h3>🪪 你的 LINE userId</h3>
+    <div class="idbox" id="idText">讀取中…</div>
+    <button id="btnCopyId" class="btn sm">📋 複製</button>
+    <p class="hint" id="idLogMsg"></p>
+  </section>
+
+  <!-- 第 1 頁：月曆 -->
+  <section id="viewCalendar">
+    <div class="card">
+      <div class="intro-row">
+        <div><b>一對一</b>$1200<br><span>1 小時・含場地費</span></div>
+        <div><b>一對二</b>$1500<br><span>1 小時・含場地費<br>（一人 $750）</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="cal-head">
+        <button class="nav" id="prevM" aria-label="上個月">‹</button>
+        <b id="monthTitle"></b>
+        <button class="nav" id="nextM" aria-label="下個月">›</button>
+      </div>
+      <div class="week" id="weekHead"></div>
+      <div id="calBody"></div>
+      <div class="legend">
+        <span><i style="background:var(--mint)"></i>可約</span>
+        <span><i style="background:var(--grey)"></i>已滿</span>
+        <span><i style="background:#f3ebdc"></i>休假</span>
+        <span><i style="background:#e8eef5"></i>進修</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 第 2 頁：選時段 -->
+  <section id="viewSlots" class="hidden">
+    <button class="back" id="backToCal">‹ 回月曆</button>
+    <div class="card">
+      <h3 id="slotsTitle"></h3>
+      <div id="slotsBody"></div>
+    </div>
+  </section>
+
+  <!-- 第 3 頁：填資料 -->
+  <section id="viewForm" class="hidden">
+    <button class="back" id="backToSlots">‹ 重選時段</button>
+    <div class="card">
+      <div class="summary" id="formSummary"></div>
+      <h3>選擇課程</h3>
+      <div class="courses" id="courseBox"></div>
+      <label class="f" for="fName">姓名</label>
+      <input class="inp" id="fName" maxlength="30" placeholder="王小明">
+      <label class="f" for="fPhone">手機</label>
+      <input class="inp" id="fPhone" type="tel" maxlength="12" placeholder="0912345678">
+      <label class="f" for="fNote">備註（選填）</label>
+      <textarea class="inp" id="fNote" maxlength="200" placeholder="想加強的地方、程度…"></textarea>
+      <div class="rules">
+        <b>📌 上課須知</b>
+        <ul>
+          <li>請準時到場</li>
+          <li>有事無法出席，請提前告知教練</li>
+          <li>課程費用已包含場地費</li>
+        </ul>
+      </div>
+      <button class="btn primary block" id="btnSubmit">送出預約</button>
+      <div class="ferr" id="formErr"></div>
+    </div>
+  </section>
+
+  <!-- 第 4 頁：完成 -->
+  <section id="viewDone" class="hidden">
+    <div class="card done">
+      <div class="big">🎉</div>
+      <h3>預約成功！</h3>
+      <table id="doneTable"></table>
+      <p class="hint">LINE 會收到一則確認訊息，上課前一天也會提醒你喔 ♡</p>
+      <div class="row" style="justify-content:center;margin-top:14px">
+        <button class="btn" id="btnAgain">再約一堂</button>
+        <button class="btn primary" id="btnClose">完成</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>By 許教練</footer>
+
+<!-- ⚙️ 教練模式面板（只有許教練看得到） -->
+<section id="coachPanel" class="hidden">
+  <div class="panel-head"><b>⚙️ 教練模式・開放時段設定</b><button id="closePanel" aria-label="關閉">✕</button></div>
+  <main>
+    <div class="card">
+      <h3>🔍 檢查後端版本</h3>
+      <button class="btn sm" id="btnVersion">檢查</button>
+      <div class="progress" id="versionMsg"></div>
+    </div>
+
+    <div class="card">
+      <h3>📅 批次設定</h3>
+      <div class="row">
+        <input type="date" class="inp" id="bStart"><span>到</span><input type="date" class="inp" id="bEnd">
+      </div>
+      <div class="radios">
+        <label><input type="radio" name="bAct" value="open" checked>開放時段</label>
+        <label><input type="radio" name="bAct" value="休假">整段休假</label>
+        <label><input type="radio" name="bAct" value="進修">整段進修</label>
+        <label><input type="radio" name="bAct" value="clear">清除（不開放）</label>
+      </div>
+      <div id="bSlotsWrap">
+        <div class="tabs">
+          <button type="button" class="on" data-tab="wd">平日（週一～五）</button>
+          <button type="button" data-tab="hd">假日（週六日＋國定假日）</button>
+        </div>
+        <div id="chipsWd" class="chips"></div>
+        <div id="chipsHd" class="chips hidden"></div>
+        <div class="quick">
+          <button type="button" class="btn sm" id="bAll">全選</button>
+          <button type="button" class="btn sm" id="bNone">清空</button>
+        </div>
+        <p class="hint">平日、假日可以勾不同時段。沒勾任何時段的那一類日子 = 不開放。</p>
+        <label class="f" for="bNote">場地備註（選填，會出現在學生的 LINE 訊息）</label>
+        <input class="inp" id="bNote" maxlength="100" placeholder="北區運動中心 3 號場">
+      </div>
+      <button class="btn primary block" id="btnBatch" style="margin-top:12px">開始批次儲存</button>
+      <div class="progress" id="batchMsg"></div>
+    </div>
+
+    <div class="card">
+      <h3>✏️ 單日微調</h3>
+      <div class="row">
+        <input type="date" class="inp" id="sDate">
+        <button class="btn sm" id="btnLoadDay">讀取</button>
+      </div>
+      <div id="dayEditor" class="hidden" style="margin-top:10px">
+        <label class="f" for="sStatus">這一天</label>
+        <select class="inp" id="sStatus">
+          <option value="">正常開放</option>
+          <option value="休假">休假</option>
+          <option value="進修">進修</option>
+        </select>
+        <div id="sSlotsWrap">
+          <label class="f">勾選要開放的時段</label>
+          <div id="chipsDay" class="chips"></div>
+          <p class="hint">標「已約」= 已有學生預約或日曆上有行程。取消勾選不會取消學生的預約。</p>
+          <label class="f" for="sNote">場地備註（選填）</label>
+          <input class="inp" id="sNote" maxlength="100" placeholder="北區運動中心 3 號場">
+        </div>
+        <button class="btn primary block" id="btnSaveDay" style="margin-top:12px">儲存這一天</button>
+      </div>
+      <div class="progress" id="dayMsg"></div>
+    </div>
+
+    <p class="hint" style="text-align:center">要取消某堂課：到 Google 日曆刪掉那個活動，時段就會重新空出來。</p>
+  </main>
+</section>
+
+<script>
+/* =================================================================
+ * ✏️ 設定區（只要改這三行，引號要留著）
+ * ================================================================= */
+const LIFF_ID      = "請貼上LIFF ID";            // LINE Login 頻道 → LIFF 分頁 → LIFF ID
+const SCRIPT_URL   = "請貼上Apps Script網址";     // Apps Script 部署後的網址（/exec 結尾）
+const OWNER_USERID = "請貼上許教練的userId";       // 跟 Code.gs 裡的一樣
+
+const EXPECTED_VERSION = "v1-badminton";        // 跟 Code.gs 的 VERSION 一樣，用來比對
+
+/* =================================================================
+ * 以下不用改
+ * ================================================================= */
+const ALL_SLOTS = ["09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00"];
+const COURSES = [
+  { key:"一對一", price:1200, desc:"1 小時・含場地費" },
+  { key:"一對二", price:1500, desc:"含場地費・一人 $750" }
+];
+const MONTHS_AHEAD = 3;      // 可以看幾個月（含本月）
+const CACHE_MS = 15000;      // 月份快取 15 秒
+const LOADING_TEXTS = [
+  "🏸 正在幫你找教練的空檔…",
+  "👟 教練在綁鞋帶，馬上就好…",
+  "💡 球場燈光打開中…",
+  "☕ 再等一下下，資料快到了～"
+];
+// 國定假日備用清單（線上假日資料抓不到時才用；農曆節日以線上資料為準）
+const FIXED_HOLIDAYS = [["01-01","元旦"],["02-28","和平紀念"],["04-04","兒童節"],["05-01","勞動節"],
+                        ["09-28","教師節"],["10-10","國慶日"],["10-25","光復節"],["12-25","行憲紀念"]];
+
+const state = { userId:"", displayName:"", ym:"", date:"", time:"", course:"", venue:"", member:null };
+const monthCache = {};
+const holidayMap = {};
+const holidayLoaded = {};
+let lastMonth = null;      // {ym, data}
+let monthToken = 0, slotToken = 0;
+
+/* ---------- 小工具 ---------- */
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const ymd = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+const parseYmd = s => { const [a, b, c] = s.split("-").map(Number); return new Date(a, b - 1, c); };
+const ymOf = d => d.getFullYear() + "-" + pad(d.getMonth() + 1);
+const shiftYm = (ym, n) => { const [y, m] = ym.split("-").map(Number); return ymOf(new Date(y, m - 1 + n, 1)); };
+const WEEK = ["日","一","二","三","四","五","六"];
+const dateZh = s => { const d = parseYmd(s); return `${d.getMonth()+1}/${d.getDate()}（${WEEK[d.getDay()]}）`; };
+const endTime = t => pad(Number(t.slice(0, 2)) + 1) + ":00";
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const todayStr = () => ymd(new Date());
+function cleanSlots(arr) {
+  const ok = new Set((Array.isArray(arr) ? arr : []).filter(x => typeof x === "string" && /^\d{2}:\d{2}$/.test(x)));
+  return ALL_SLOTS.filter(t => ok.has(t));
+}
+function slotIsFuture(date, t) { return new Date(date + "T" + t + ":00+08:00").getTime() > Date.now(); }
+function isHolidayLike(date) { const w = parseYmd(date).getDay(); return w === 0 || w === 6 || !!holidayMap[date]; }
+
+/* ---------- 跟後端講話（JSONP，讀得到回覆＋有逾時） ---------- */
+function jsonp(params, timeout = 18000) {
+  return new Promise((resolve, reject) => {
+    const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
+    const qs = new URLSearchParams(Object.assign({}, params, { callback: cb, _: Date.now() }));
+    const s = document.createElement("script");
+    let done = false;
+    const finish = () => { done = true; clearTimeout(timer); window[cb] = function(){}; s.remove(); };
+    const timer = setTimeout(() => { if (done) return; finish(); reject(new Error("timeout")); }, timeout);
+    window[cb] = data => { if (done) return; finish(); resolve(data); };
+    s.onerror = () => { if (done) return; finish(); reject(new Error("network")); };
+    s.src = SCRIPT_URL + "?" + qs.toString();
+    document.body.appendChild(s);
+  });
+}
+
+// 失敗會自動重試 2 次（總共試 3 次）
+async function callApi(params, validate, opts = {}) {
+  const tries = opts.tries || 3, timeout = opts.timeout || 18000;
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await jsonp(params, timeout);
+      if (r && r.ok === false && r.error === "forbidden") { const e = new Error("forbidden"); e.fatal = true; throw e; }
+      if (validate && !validate(r)) throw new Error("bad_format");
+      return r;
+    } catch (e) {
+      lastErr = e;
+      if (e.fatal) throw e;
+      if (i < tries - 1) await sleep(800 * (i + 1));
+    }
+  }
+  throw lastErr;
+}
+
+function errMsg(e) {
+  const why = e && e.message === "timeout" ? "連線等太久了（超過 18 秒）"
+            : e && e.message === "bad_format" ? "收到的資料怪怪的"
+            : e && e.message === "forbidden" ? "沒有教練權限"
+            : "網路好像連不上";
+  return why + "，不是都約滿喔！請按下面的按鈕再試一次。";
+}
+
+function showLoading(el) {
+  let i = 0;
+  el.innerHTML = `<div class="loading"><div class="shuttle">🏸</div><div class="lt">${LOADING_TEXTS[0]}</div></div>`;
+  const lt = el.querySelector(".lt");
+  const timer = setInterval(() => {
+    if (!lt.isConnected) return clearInterval(timer);
+    i = (i + 1) % LOADING_TEXTS.length; lt.textContent = LOADING_TEXTS[i];
+  }, 2500);
+  return () => clearInterval(timer);
+}
+function showError(el, msg, retry) {
+  el.innerHTML = `<div class="err"><div>😣 ${esc(msg)}</div><button class="btn primary sm">再試一次</button></div>`;
+  el.querySelector("button").onclick = retry;
+}
+function notice(msg) { const n = $("topNotice"); n.textContent = msg; n.classList.remove("hidden"); }
+
+function show(view) {
+  ["viewCalendar","viewSlots","viewForm","viewDone"].forEach(v => $(v).classList.toggle("hidden", v !== view));
+  window.scrollTo(0, 0);
+}
+
+/* ---------- 國定假日 ---------- */
+function loadHolidays(year) {
+  if (holidayLoaded[year]) return holidayLoaded[year];
+  FIXED_HOLIDAYS.forEach(([md, name]) => { const k = year + "-" + md; if (!holidayMap[k]) holidayMap[k] = name; });
+  holidayLoaded[year] = (async () => {
+    try {
+      const ctrl = new AbortController(); setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(`https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/${year}.json`, { signal: ctrl.signal });
+      if (!res.ok) return false;
+      const arr = await res.json();
+      (Array.isArray(arr) ? arr : []).forEach(x => {
+        if (x && x.isHoliday && x.description && /^\d{8}$/.test(x.date)) {
+          holidayMap[`${x.date.slice(0,4)}-${x.date.slice(4,6)}-${x.date.slice(6,8)}`] = String(x.description);
+        }
+      });
+      return true;
+    } catch (e) { return false; }
+  })();
+  return holidayLoaded[year];
+}
+
+/* ---------- LINE 登入 ---------- */
+async function initLiff() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return false; }
+    const p = await liff.getProfile();
+    state.userId = p.userId; state.displayName = p.displayName;
+  } catch (e) {
+    console.warn(e);
+    notice("⚠️ 抓不到你的 LINE 身分，可以看時段，但無法送出預約。請從 LINE 官方帳號的選單開啟這個頁面。");
+  }
+  return true;
+}
+
+/* ---------- 月曆 ---------- */
+function validMonth(r, ym) {
+  if (!r || r.ok !== true || r.ym !== ym) return false;
+  if (!r.month || typeof r.month !== "object" || Array.isArray(r.month)) return false;
+  if (!r.status || typeof r.status !== "object" || Array.isArray(r.status)) return false;
+  for (const k in r.month) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || k.slice(0, 7) !== ym) return false;
+    if (!Array.isArray(r.month[k])) return false;
+  }
+  return true;
+}
+
+async function getMonthData(ym, force) {
+  const c = monthCache[ym];
+  if (!force && c && Date.now() - c.t < CACHE_MS) return c.data;
+  const r = await callApi({ action: "getMonth", ym }, x => validMonth(x, ym));
+  monthCache[ym] = { t: Date.now(), data: r };
+  return r;
+}
+
+function minYm() { return ymOf(new Date()); }
+function maxYm() { return shiftYm(minYm(), MONTHS_AHEAD - 1); }
+
+async function loadMonth(ym, force) {
+  state.ym = ym;
+  const [y, m] = ym.split("-").map(Number);
+  $("monthTitle").textContent = `${y} 年 ${m} 月`;
+  $("prevM").disabled = ym <= minYm();
+  $("nextM").disabled = ym >= maxYm();
+  loadHolidays(y).then(() => { if (lastMonth && lastMonth.ym === state.ym) renderCalendar(lastMonth.ym, lastMonth.data); });
+
+  const token = ++monthToken;
+  const box = $("calBody");
+  const cached = monthCache[ym];
+  let stop = () => {};
+  if (force || !cached || Date.now() - cached.t >= CACHE_MS) stop = showLoading(box);
+  try {
+    const data = await getMonthData(ym, force);
+    if (token !== monthToken) return;
+    stop();
+    lastMonth = { ym, data };
+    renderCalendar(ym, data);
+    // 偷偷先載下個月，切換比較順
+    const nx = shiftYm(ym, 1);
+    if (nx <= maxYm()) getMonthData(nx).catch(() => {});
+  } catch (e) {
+    if (token !== monthToken) return;
+    stop();
+    showError(box, "月曆載入失敗：" + errMsg(e), () => loadMonth(ym, true));
+  }
+}
+
+function renderCalendar(ym, data) {
+  const [y, m] = ym.split("-").map(Number);
+  const first = new Date(y, m - 1, 1);
+  const days = new Date(y, m, 0).getDate();
+  const lead = (first.getDay() + 6) % 7;     // 週一為第一欄
+  const today = todayStr();
+  let html = '<div class="cal">';
+  for (let i = 0; i < lead; i++) html += '<div class="day blank"></div>';
+  for (let d = 1; d <= days; d++) {
+    const ds = `${ym}-${pad(d)}`;
+    const hol = holidayMap[ds];
+    let cls = "full", lab = "已滿", click = false;
+    if (ds >= today) {
+      const st = data.status[ds];
+      if (st === "休假") { cls = "off"; lab = "休假"; }
+      else if (st === "進修") { cls = "study"; lab = "進修"; }
+      else if (cleanSlots(data.month[ds]).length) { cls = "ok"; lab = "可約"; click = true; }
+    }
+    if (ds === today) cls += " today";
+    html += `<button class="day ${cls}" ${click ? `data-d="${ds}"` : "disabled"}>` +
+            `<span class="num${hol ? " red" : ""}">${d}</span>` +
+            (hol ? `<span class="hol">${esc(hol.slice(0, 4))}</span>` : "") +
+            `<span class="lab">${lab}</span></button>`;
+  }
+  html += "</div>";
+  $("calBody").innerHTML = html;
+  $("calBody").querySelectorAll("[data-d]").forEach(b => b.onclick = () => openDay(b.dataset.d));
+}
+
+/* ---------- 時段 ---------- */
+async function openDay(date) {
+  state.date = date; state.time = "";
+  show("viewSlots");
+  $("slotsTitle").textContent = "📅 " + dateZh(date);
+  const box = $("slotsBody");
+  const stop = showLoading(box);
+  const token = ++slotToken;
+  try {
+    const r = await callApi({ action: "getSlots", date },
+      x => x && x.ok === true && x.date === date && Array.isArray(x.slots) && Array.isArray(x.open));
+    if (token !== slotToken) return;
+    stop(); renderSlots(r);
+  } catch (e) {
+    if (token !== slotToken) return;
+    stop(); showError(box, "時段載入失敗：" + errMsg(e), () => openDay(date));
+  }
+}
+
+function renderSlots(r) {
+  const box = $("slotsBody");
+  state.venue = r.note || "";
+  if (r.status === "休假" || r.status === "進修") {
+    box.innerHTML = `<div class="empty">教練這天${esc(r.status)}，請改選其他日期 ♡</div>`;
+    return;
+  }
+  const avail = cleanSlots(r.slots);
+  const full = cleanSlots(r.open).filter(t => !avail.includes(t));
+  let html = state.venue ? `<div class="venue">📍 場地：${esc(state.venue)}</div>` : "";
+  if (!avail.length) {
+    html += `<div class="empty">本日已約滿，請改選其他日期 ♡</div>`;
+  } else {
+    html += `<h3 class="sec">可預約時段</h3>` +
+      avail.map(t => `<button class="slot-ok" data-t="${t}"><span>${t} – ${endTime(t)}</span><span>選這個 ›</span></button>`).join("");
+  }
+  if (full.length) {
+    html += `<h3 class="sec grey">時段已額滿</h3><div class="full-list">` +
+      full.map(t => `<div class="slot-full">${t} – ${endTime(t)}</div>`).join("") + `</div>`;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll("[data-t]").forEach(b => b.onclick = () => openForm(b.dataset.t));
+}
+
+/* ---------- 填資料 ---------- */
+function renderCourses() {
+  $("courseBox").innerHTML = COURSES.map(c =>
+    `<button type="button" class="course${state.course === c.key ? " on" : ""}" data-c="${c.key}">` +
+    `<b>${c.key}</b><span class="p">$${c.price}</span><small>${c.desc}</small></button>`).join("");
+  $("courseBox").querySelectorAll("[data-c]").forEach(b => b.onclick = () => { state.course = b.dataset.c; renderCourses(); });
+}
+
+function openForm(t) {
+  state.time = t;
+  $("formSummary").textContent = `📅 ${dateZh(state.date)}　⏰ ${t} – ${endTime(t)}`;
+  renderCourses();
+  if (state.member) {
+    if (!$("fName").value) $("fName").value = state.member.name || "";
+    if (!$("fPhone").value) $("fPhone").value = state.member.phone || "";
+  }
+  $("formErr").textContent = "";
+  show("viewForm");
+}
+
+async function submitBooking() {
+  const err = $("formErr");
+  const name = $("fName").value.trim();
+  const phone = $("fPhone").value.replace(/[^\d]/g, "");
+  const note = $("fNote").value.trim();
+  if (!state.course) return err.textContent = "請先選擇課程 🙏";
+  if (!name) return err.textContent = "請填寫姓名";
+  if (!/^0\d{8,9}$/.test(phone)) return err.textContent = "手機號碼格式好像不對，例如 0912345678";
+  if (!state.userId) return err.textContent = "抓不到你的 LINE 身分，請從 LINE 官方帳號的選單開啟這頁再預約";
+
+  const btn = $("btnSubmit");
+  btn.disabled = true; btn.textContent = "送出中… 🏸";
+  err.textContent = "";
+  const payload = { action: "book", date: state.date, time: state.time, course: state.course,
+                    name, phone, note, userId: state.userId, displayName: state.displayName };
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30000);
+    let r;
+    try {
+      const res = await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify(payload), signal: ctrl.signal });
+      r = JSON.parse(await res.text());
+    } finally { clearTimeout(timer); }
+
+    if (r && r.ok) {
+      delete monthCache[state.date.slice(0, 7)];
+      state.member = { name, phone };
+      const b = r.booking;
+      $("doneTable").innerHTML =
+        `<tr><td>日期</td><td>${esc(dateZh(b.date))}</td></tr>` +
+        `<tr><td>時間</td><td>${esc(b.time)} – ${esc(endTime(b.time))}</td></tr>` +
+        `<tr><td>課程</td><td>${esc(b.course)}（$${esc(b.price)}）</td></tr>` +
+        `<tr><td>場地</td><td>${esc(b.venue)}</td></tr>`;
+      $("fNote").value = "";
+      show("viewDone");
+    } else if (r && r.error === "taken") {
+      err.textContent = "哎呀，這個時段剛剛被約走了 😢 幫你重新整理時段…";
+      setTimeout(() => openDay(state.date), 1500);
+    } else {
+      err.textContent = "送出失敗（" + esc((r && (r.message || r.error)) || "未知原因") + "），請再試一次";
+    }
+  } catch (e) {
+    err.textContent = "網路不太順，不確定有沒有送出成功。請先不要重複送出，等 1 分鐘看看 LINE 有沒有收到「預約成功」；沒收到再試一次 🙏";
+  } finally {
+    btn.disabled = false; btn.textContent = "送出預約";
+  }
+}
+
+/* ---------- 顯示 userId（給設定用） ---------- */
+function wantShowId() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("showid") === "1") return true;
+  return decodeURIComponent(q.get("liff.state") || "").includes("showid=1");
+}
+async function showIdCard() {
+  $("idCard").classList.remove("hidden");
+  if (!state.userId) { $("idText").textContent = "抓不到 userId，請從 LINE 裡面打開這個網址"; return; }
+  $("idText").textContent = state.userId;
+  $("btnCopyId").onclick = async () => {
+    try { await navigator.clipboard.writeText(state.userId); $("btnCopyId").textContent = "✅ 已複製"; }
+    catch (e) { $("btnCopyId").textContent = "請長按上面文字複製"; }
+  };
+  try {
+    const r = await jsonp({ action: "logId", userId: state.userId, name: state.displayName });
+    $("idLogMsg").textContent = r && r.ok ? "✅ 也已經記錄到試算表的「ID紀錄」分頁了。" : "（沒記錄到試算表，沒關係，直接複製上面這串就好）";
+  } catch (e) {
+    $("idLogMsg").textContent = "（沒記錄到試算表，沒關係，直接複製上面這串就好）";
+  }
+}
+
+/* =================================================================
+ * ⚙️ 教練模式
+ * ================================================================= */
+const wdSet = new Set(), hdSet = new Set();
+let daySet = new Set();
+let bTab = "wd";
+
+function makeChips(el, set, booked) {
+  booked = booked || new Set();
+  el.innerHTML = ALL_SLOTS.map(t =>
+    `<button type="button" class="chip${set.has(t) ? " on" : ""}${booked.has(t) ? " booked" : ""}" data-t="${t}">${t}</button>`).join("");
+  el.querySelectorAll(".chip").forEach(b => b.onclick = () => {
+    const t = b.dataset.t;
+    if (set.has(t)) set.delete(t); else set.add(t);
+    b.classList.toggle("on");
+  });
+}
+
+function openPanel() {
+  const t = new Date();
+  if (!$("bStart").value) $("bStart").value = ymd(t);
+  if (!$("bEnd").value) $("bEnd").value = ymd(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 13));
+  if (!$("sDate").value) $("sDate").value = ymd(t);
+  makeChips($("chipsWd"), wdSet);
+  makeChips($("chipsHd"), hdSet);
+  $("coachPanel").classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+function closePanel() {
+  $("coachPanel").classList.add("hidden");
+  document.body.style.overflow = "";
+  Object.keys(monthCache).forEach(k => delete monthCache[k]);
+  show("viewCalendar");
+  loadMonth(state.ym || minYm(), true);
+}
+
+async function checkVersion() {
+  const el = $("versionMsg");
+  el.textContent = "檢查中…";
+  try {
+    const r = await callApi({ action: "version" }, x => x && x.ok === true && typeof x.version === "string");
+    el.innerHTML = r.version === EXPECTED_VERSION
+      ? `<span class="ok-t">✅ 後端版本：${esc(r.version)}（跟網頁一致）</span>`
+      : `<span class="bad-t">⚠️ 後端版本是 ${esc(r.version)}，網頁預期 ${esc(EXPECTED_VERSION)}。\n可能還沒重新部署「新版本」。</span>`;
+  } catch (e) {
+    el.innerHTML = `<span class="bad-t">❌ 連不到後端：${esc(errMsg(e))}\n請檢查 SCRIPT_URL 有沒有貼對。</span>`;
+  }
+}
+
+// 存一天，並核對後端「實際存進去的內容」
+async function saveDay(date, slots, status, note) {
+  const want = status ? [] : cleanSlots(slots);
+  const r = await callApi(
+    { action: "saveSlots", date, slots: want.join(","), status, note: note || "", userId: state.userId },
+    x => x && x.ok === true && x.saved && x.saved.date === date);
+  const got = cleanSlots(r.saved.slots);
+  if (got.join(",") !== want.join(",") || (r.saved.status || "") !== status) throw new Error("mismatch");
+  return r.saved;
+}
+
+async function runBatch(items) {
+  const msg = $("batchMsg");
+  const btn = $("btnBatch");
+  btn.disabled = true;
+  const fails = [];
+  let ok = 0;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    msg.textContent = `儲存中… ${i + 1} / ${items.length}（${dateZh(it.date)}）`;
+    try {
+      await saveDay(it.date, it.slots, it.status, it.note);
+      ok++;
+    } catch (e) {
+      if (e.fatal) {
+        msg.innerHTML = `<span class="bad-t">❌ 後端說你沒有教練權限（forbidden）。\n請確認 Code.gs 和 index.html 的 OWNER_USERID 一樣，而且已重新部署。</span>`;
+        btn.disabled = false; return;
+      }
+      fails.push(it);
+    }
+    await sleep(300);     // 每筆間隔 300 毫秒，不要打太快
+  }
+  Object.keys(monthCache).forEach(k => delete monthCache[k]);
+  btn.disabled = false;
+  if (!fails.length) {
+    msg.innerHTML = `<span class="ok-t">✅ 全部完成！共 ${ok} 天。</span>`;
+  } else {
+    msg.innerHTML = `<span class="bad-t">完成 ${ok} 天，失敗 ${fails.length} 天：\n${fails.map(f => dateZh(f.date)).join("、")}</span>\n<button class="btn sm" id="btnRetryFails">重試失敗的日期</button>`;
+    $("btnRetryFails").onclick = () => runBatch(fails);
+  }
+}
+
+async function startBatch() {
+  const msg = $("batchMsg");
+  const s = $("bStart").value, e = $("bEnd").value;
+  if (!s || !e) return msg.textContent = "請選開始和結束日期";
+  if (e < s) return msg.textContent = "結束日期不能比開始早喔";
+  if (s < todayStr()) return msg.textContent = "開始日期不能是過去的日子";
+  const dates = [];
+  for (let d = parseYmd(s); ymd(d) <= e; d.setDate(d.getDate() + 1)) dates.push(ymd(d));
+  if (dates.length > 120) return msg.textContent = "一次最多設定 120 天，請分批";
+
+  const act = document.querySelector("input[name=bAct]:checked").value;
+  const note = $("bNote").value.trim();
+  if (act === "open") {
+    msg.textContent = "正在讀取國定假日…";
+    const years = [...new Set(dates.map(x => Number(x.slice(0, 4))))];
+    const got = await Promise.all(years.map(loadHolidays));
+    if (got.includes(false)) msg.textContent = "（線上假日資料抓不到，只用固定假日判斷，農曆節日請用單日微調）";
+  }
+  const items = dates.map(date => {
+    if (act === "休假" || act === "進修") return { date, slots: [], status: act, note: "" };
+    if (act === "clear") return { date, slots: [], status: "", note: "" };
+    return { date, slots: [...(isHolidayLike(date) ? hdSet : wdSet)], status: "", note };
+  });
+  const label = act === "open" ? "開放時段" : act === "clear" ? "清除" : act;
+  if (!confirm(`即將把 ${dates.length} 天設定為「${label}」。\n這些日期原本的設定會被覆蓋，確定嗎？`)) return;
+  runBatch(items);
+}
+
+async function loadDayEditor() {
+  const date = $("sDate").value;
+  const msg = $("dayMsg");
+  if (!date) return msg.textContent = "請先選日期";
+  $("dayEditor").classList.add("hidden");
+  msg.textContent = "讀取中… 🏸";
+  try {
+    const [raw, day] = await Promise.all([
+      callApi({ action: "getOpen", ym: date.slice(0, 7) }, x => x && x.ok === true && x.days && typeof x.days === "object"),
+      callApi({ action: "getSlots", date }, x => x && x.ok === true && x.date === date && Array.isArray(x.open))
+    ]);
+    const d = raw.days[date] || { slots: [], status: "", note: "" };
+    daySet = new Set(cleanSlots(d.slots));
+    const avail = cleanSlots(day.slots);
+    const booked = new Set(cleanSlots(day.open).filter(t => !avail.includes(t) && slotIsFuture(date, t)));
+    makeChips($("chipsDay"), daySet, booked);
+    $("sStatus").value = d.status || "";
+    $("sNote").value = d.note || "";
+    $("sSlotsWrap").classList.toggle("hidden", !!d.status);
+    $("dayEditor").classList.remove("hidden");
+    msg.textContent = `目前設定：${d.status || (daySet.size ? daySet.size + " 個時段開放" : "未開放")}`;
+  } catch (e) {
+    msg.innerHTML = `<span class="bad-t">讀取失敗：${esc(errMsg(e))}</span>`;
+  }
+}
+
+async function saveDayEditor() {
+  const date = $("sDate").value;
+  const status = $("sStatus").value;
+  const msg = $("dayMsg");
+  const btn = $("btnSaveDay");
+  btn.disabled = true; msg.textContent = "儲存中… 🏸";
+  try {
+    const saved = await saveDay(date, [...daySet], status, $("sNote").value.trim());
+    delete monthCache[date.slice(0, 7)];
+    msg.innerHTML = `<span class="ok-t">✅ 已儲存 ${esc(dateZh(date))}：${esc(saved.status || (saved.slots.length ? saved.slots.join("、") : "不開放"))}</span>`;
+  } catch (e) {
+    msg.innerHTML = e.fatal
+      ? `<span class="bad-t">❌ 沒有教練權限（forbidden），請確認 OWNER_USERID 並重新部署。</span>`
+      : `<span class="bad-t">❌ 儲存失敗：${esc(e.message === "mismatch" ? "存進去的內容跟你選的不一樣，請再按一次儲存" : errMsg(e))}</span>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* =================================================================
+ * 🚀 開始
+ * ================================================================= */
+function bindEvents() {
+  $("weekHead").innerHTML = ["一","二","三","四","五","六","日"].map(w => `<div>${w}</div>`).join("");
+  $("prevM").onclick = () => loadMonth(shiftYm(state.ym, -1));
+  $("nextM").onclick = () => loadMonth(shiftYm(state.ym, 1));
+  $("backToCal").onclick = () => { show("viewCalendar"); loadMonth(state.ym); };
+  $("backToSlots").onclick = () => openDay(state.date);
+  $("btnSubmit").onclick = submitBooking;
+  $("btnAgain").onclick = () => { show("viewCalendar"); loadMonth(state.ym, true); };
+  $("btnClose").onclick = () => {
+    if (window.liff && liff.isInClient && liff.isInClient()) liff.closeWindow();
+    else { show("viewCalendar"); loadMonth(state.ym, true); }
+  };
+
+  $("gearBtn").onclick = openPanel;
+  $("closePanel").onclick = closePanel;
+  $("btnVersion").onclick = checkVersion;
+  $("btnBatch").onclick = startBatch;
+  $("btnLoadDay").onclick = loadDayEditor;
+  $("btnSaveDay").onclick = saveDayEditor;
+  $("sStatus").onchange = () => $("sSlotsWrap").classList.toggle("hidden", !!$("sStatus").value);
+  document.querySelectorAll("input[name=bAct]").forEach(r => r.onchange = () => {
+    $("bSlotsWrap").classList.toggle("hidden", document.querySelector("input[name=bAct]:checked").value !== "open");
+  });
+  document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+    bTab = b.dataset.tab;
+    document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+    $("chipsWd").classList.toggle("hidden", bTab !== "wd");
+    $("chipsHd").classList.toggle("hidden", bTab !== "hd");
+  });
+  $("bAll").onclick = () => { const s = bTab === "wd" ? wdSet : hdSet; ALL_SLOTS.forEach(t => s.add(t)); makeChips($(bTab === "wd" ? "chipsWd" : "chipsHd"), s); };
+  $("bNone").onclick = () => { const s = bTab === "wd" ? wdSet : hdSet; s.clear(); makeChips($(bTab === "wd" ? "chipsWd" : "chipsHd"), s); };
+}
+
+(async function main() {
+  bindEvents();
+  const y = new Date().getFullYear();
+  loadHolidays(y); loadHolidays(y + 1);
+
+  const ok = await initLiff();
+  if (ok === false) return;    // 正在跳轉 LINE 登入
+
+  // 只有許教練本人才看得到 ⚙️
+  if (state.userId && state.userId === OWNER_USERID) $("gearBtn").classList.remove("hidden");
+  if (wantShowId()) showIdCard();
+
+  loadMonth(minYm());
+
+  // 老朋友自動帶入姓名電話
+  if (state.userId) {
+    jsonp({ action: "getMember", userId: state.userId })
+      .then(r => { if (r && r.ok && r.member) state.member = r.member; })
+      .catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
